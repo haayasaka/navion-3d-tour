@@ -1,0 +1,28 @@
+NAVION — TUR PRODUK 3D
+======================
+
+Cara membuka
+------------
+Ekstrak arsip ini, lalu klik ganda index.html. Halaman terbuka di peramban.
+Tidak ada server yang perlu dijalankan dan tidak ada berkas lain yang dibutuhkan.
+
+Seluruh model 3D, data komponen, dan gaya halaman sudah tertanam di dalam
+index.html. Berkas itu dapat dipindahkan ke mana saja dan tetap bekerja.
+
+Bila ingin dipakai tanpa internet
+---------------------------------
+Halaman ini memuat pustaka three.js r128. Ia mencari three.min.js di folder ini
+lebih dulu, dan bila tidak ada, mengambilnya dari internet.
+
+Untuk pemakaian luring, unduh three.min.js versi r128 lalu letakkan di sebelah
+index.html:
+
+    https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+
+Kontrol
+-------
+Tarik            memutar model
+Gulir            memperbesar dan memperkecil
+Klik komponen    menyorot dan membidikkan kamera ke komponen itu
+Teardown         memisahkan komponen
+Telusur bergulir tab kedua, penjelasan bertahap mengikuti gulir
