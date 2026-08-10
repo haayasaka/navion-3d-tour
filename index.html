@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navion — 3D Product Tour</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#fbfbfc; --line:#e6e8ec; --line2:#f0f1f4;
+    --ink:#14171c; --ink2:#525a66; --ink3:#8b94a3;
+    --accent:#1f6feb; --accent-soft:#eef4ff; --warn:#b4530a; --warn-soft:#fff6ec;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+    color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+  .tabs{display:flex;align-items:center;gap:4px;padding:0 20px;height:52px;flex:none;
+    border-bottom:1px solid var(--line);background:#fff;z-index:20}
+  .tabs .logo{font-weight:660;font-size:16px;letter-spacing:-.02em;margin-right:18px}
+  .tabs .logo span{font-weight:400;color:var(--ink3);font-size:12px;margin-left:8px}
+  .tab{font:inherit;font-size:13px;font-weight:520;color:var(--ink3);background:none;border:0;
+    padding:8px 14px;border-radius:8px;cursor:pointer;transition:.14s}
+  .tab:hover{color:var(--ink);background:var(--line2)}
+  .tab.on{color:var(--accent);background:var(--accent-soft)}
+  .tabs .right{margin-left:auto;font-size:11px;color:var(--ink3)}
+
+  .body{flex:1;display:grid;grid-template-columns:1fr 400px;min-height:0}
+  @media(max-width:1000px){.body{grid-template-columns:1fr;grid-template-rows:48vh 1fr}}
+
+  /* ---------------- stage ---------------- */
+  .stage{position:relative;overflow:hidden;border-right:1px solid var(--line);
+    background:radial-gradient(120% 80% at 50% 0%,#fff 0%,#f6f7f9 60%,#eef0f4 100%)}
+  canvas{display:block;width:100%;height:100%}
+  .cap{position:absolute;top:18px;left:22px;pointer-events:none;max-width:60%}
+  .cap h2{font-size:19px;font-weight:640;letter-spacing:-.02em;opacity:0;transition:.35s}
+  .cap p{font-size:12px;color:var(--ink3);margin-top:2px;opacity:0;transition:.35s}
+  .cap.show h2,.cap.show p{opacity:1}
+  .step{position:absolute;left:50%;top:20px;transform:translateX(-50%);
+    background:rgba(20,23,28,.88);color:#fff;font-size:12px;padding:6px 14px;border-radius:99px;
+    opacity:0;transition:.25s;pointer-events:none;white-space:nowrap}
+  .step.show{opacity:1}
+  .loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;
+    font-size:13px;color:var(--ink3);z-index:9;transition:.4s}
+  .loading.gone{opacity:0;pointer-events:none}
+
+  .hud{position:absolute;left:22px;bottom:20px;right:22px;display:flex;gap:8px;
+    align-items:flex-end;flex-wrap:wrap;pointer-events:none}
+  .hud>*{pointer-events:auto}
+  .btn{font:inherit;font-size:12.5px;font-weight:520;color:var(--ink2);
+    background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:9px;
+    padding:8px 13px;cursor:pointer;transition:.15s;backdrop-filter:blur(8px);box-shadow:var(--shadow)}
+  .btn:hover{border-color:#cfd4dd;color:var(--ink)}
+  .btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .spacer{flex:1}
+  .scrub{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);
+    border:1px solid var(--line);border-radius:9px;padding:7px 13px;box-shadow:var(--shadow)}
+  .scrub label{font-size:11px;color:var(--ink3);white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;width:140px;height:3px;border-radius:2px;
+    background:var(--line);outline:0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+    border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer}
+
+  .hot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+    border:1.5px solid rgba(31,111,235,.55);background:rgba(255,255,255,.85);cursor:pointer;
+    display:grid;place-items:center;transition:.15s}
+  .hot:after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .hot:hover{transform:scale(1.22);border-color:var(--accent);background:#fff}
+  .hot.sel{background:var(--accent);border-color:var(--accent);transform:scale(1.15)}
+  .hot.sel:after{background:#fff}
+
+  /* ---------------- side panels ---------------- */
+  .side{position:relative;min-height:0;background:var(--panel)}
+  .pane{position:absolute;inset:0;overflow-y:auto;display:none;flex-direction:column}
+  .pane.on{display:flex}
+  .pane::-webkit-scrollbar{width:9px}
+  .pane::-webkit-scrollbar-thumb{background:#dfe2e8;border-radius:9px;border:3px solid var(--panel)}
+  .sec{padding:18px 22px;border-bottom:1px solid var(--line2)}
+  .sec h3{font-size:10.5px;font-weight:660;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink3);margin-bottom:12px}
+
+  .facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line2);
+    border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .fact{background:#fff;padding:10px 12px}
+  .fact b{display:block;font-size:15px;font-weight:640}
+  .fact span{font-size:10.5px;color:var(--ink3);display:block;margin-top:1px;line-height:1.3}
+
+  .list{display:flex;flex-direction:column;gap:4px}
+  .item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;
+    cursor:pointer;border:1px solid transparent;transition:.13s}
+  .item:hover{background:#fff;border-color:var(--line)}
+  .item.sel{background:#fff;border-color:#c9dcfb;box-shadow:0 0 0 3px var(--accent-soft)}
+  .dot{width:9px;height:9px;border-radius:3px;flex:none}
+  .item .nm{font-size:13px;font-weight:500;flex:1}
+  .item .qt{font-size:11px;color:var(--ink3)}
+  .tag{font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    color:#7c6510;background:#fdf6e0;border:1px solid #f3e6bb;padding:1.5px 5px;border-radius:4px}
+
+  .detail{padding:18px 22px;flex:1}
+  .detail .kicker{font-size:10.5px;font-weight:660;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:6px}
+  .detail h4{font-size:18px;font-weight:640;letter-spacing:-.02em;line-height:1.28}
+  .detail .part{font-size:12.5px;color:var(--ink3);margin-top:4px}
+  .detail .tagline{font-size:13.5px;color:var(--ink2);margin-top:11px;line-height:1.62}
+  .meta{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .chip{font-size:11.5px;color:var(--ink2);background:#fff;border:1px solid var(--line);
+    border-radius:6px;padding:3px 9px}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px}
+  td{padding:6px 0;border-bottom:1px solid var(--line2);vertical-align:top}
+  td:first-child{color:var(--ink3);width:48%;padding-right:10px}
+  td:last-child{text-align:right;font-weight:480}
+  tr:last-child td{border-bottom:0}
+  .note{margin-top:14px;padding:11px 13px;background:#fff;border:1px solid var(--line);
+    border-left:2.5px solid var(--accent);border-radius:0 8px 8px 0;
+    font-size:12.5px;color:var(--ink2);line-height:1.6}
+  .note.warn{border-left-color:var(--warn);background:var(--warn-soft);border-color:#f3dcc4}
+  .note b{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink3);margin-bottom:4px;font-weight:660}
+  .note.warn b{color:var(--warn)}
+  .empty{color:var(--ink3);font-size:13px;line-height:1.7}
+  .files{font-size:11.5px;color:var(--ink3);line-height:1.7}
+  .files code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px}
+
+  /* ---------------- callout annotation ---------------- */
+  #leader{position:absolute;inset:0;pointer-events:none;z-index:5;opacity:0;transition:.3s}
+  #leader.show{opacity:1}
+  .anchor{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 0 4px rgba(31,111,235,.18),0 0 0 1.5px #fff inset;
+    z-index:6;opacity:0;transition:.3s;pointer-events:none}
+  .anchor.show{opacity:1}
+  .anchor:before{content:"";position:absolute;inset:-9px;border-radius:50%;
+    border:1.5px solid rgba(31,111,235,.45);animation:pulse 2.2s ease-out infinite}
+  @keyframes pulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+  .callout{position:absolute;width:288px;background:rgba(255,255,255,.97);
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;z-index:7;
+    box-shadow:0 2px 6px rgba(16,24,40,.06),0 12px 32px rgba(16,24,40,.10);
+    opacity:0;transition:opacity .32s;pointer-events:none;backdrop-filter:blur(10px)}
+  .callout.show{opacity:1}
+  .callout .n{font-size:9.5px;font-weight:660;letter-spacing:.13em;color:var(--accent);
+    margin-bottom:6px}
+  .callout h5{font-size:16px;font-weight:650;letter-spacing:-.02em;line-height:1.22}
+  .callout .sub{font-size:11.5px;color:var(--ink3);margin-top:3px}
+  .callout p{font-size:12.5px;color:var(--ink2);line-height:1.62;margin-top:10px}
+
+  /* ---------------- scroll narrative ---------------- */
+  #scrollPane{scroll-behavior:smooth;scroll-snap-type:y proximity}
+  .chapter{min-height:100%;padding:22px;display:flex;flex-direction:column;justify-content:center;
+    scroll-snap-align:start;scroll-snap-stop:always;
+    border-bottom:1px solid var(--line2)}
+  .chapter .n{font-size:10.5px;font-weight:660;letter-spacing:.12em;color:var(--ink3);margin-bottom:10px}
+  .chapter h4{font-size:20px;font-weight:650;letter-spacing:-.025em;line-height:1.22}
+  .chapter .sub{font-size:13px;color:var(--accent);margin-top:6px;font-weight:520}
+  .chapter p{display:none}
+  .chapter .cue{font-size:11.5px;color:var(--ink3);margin-top:14px;padding-top:12px;
+    border-top:1px solid var(--line2)}
+  .chapter.act h4,.chapter.act .sub,.chapter.act p{opacity:1}
+  .chapter h4,.chapter .sub,.chapter p{opacity:.32;transition:opacity .45s}
+  .rail{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;
+    flex-direction:column;gap:6px;z-index:6;pointer-events:none}
+  .rail i{width:5px;height:5px;border-radius:50%;background:#d3d8e0;transition:.25s;display:block}
+  .rail i.on{background:var(--accent);height:16px;border-radius:3px}
+  .hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-size:11px;
+    color:var(--ink3);background:rgba(255,255,255,.9);padding:5px 12px;border-radius:99px;
+    border:1px solid var(--line);z-index:7;transition:.3s}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="tabs">
+    <div class="logo">Navion<span>tongkat pintar · pemetaan sonar sapuan-sintetik</span></div>
+    <button class="tab on" data-tab="explore">Jelajah interaktif</button>
+    <button class="tab" data-tab="scroll">Telusur bergulir</button>
+    <div class="right" id="tabHint">Tarik untuk memutar · gulir untuk memperbesar</div>
+  </div>
+
+  <div class="body">
+    <div class="stage" id="stage">
+      <div class="cap" id="cap"><h2></h2><p></p></div>
+      <div class="step" id="step"></div>
+      <svg id="leader"><line x1="0" y1="0" x2="0" y2="0" stroke="#1f6feb" stroke-width="1.4"
+        stroke-dasharray="4 3" opacity=".7"/></svg>
+      <div class="anchor" id="anchor"></div>
+      <div class="callout" id="callout">
+        <div class="n"></div><h5></h5><div class="sub"></div><p></p>
+      </div>
+      <div class="loading" id="loading">Memuat model 3D…</div>
+      <div class="hud" id="hud">
+        <button class="btn" id="bExplode">Teardown</button>
+        <button class="btn" id="bEnc">Sembunyikan casing</button>
+        <button class="btn" id="bSpin">Putar otomatis</button>
+        <button class="btn" id="bReset">Reset</button>
+        <div class="spacer"></div>
+        <div class="scrub"><label>Bongkar</label><input type="range" id="rng" min="0" max="100" value="0"></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <!-- ---------- TAB 1 ---------- -->
+      <div class="pane on" id="explorePane">
+        <div class="sec"><h3>Ringkasan sistem</h3><div class="facts" id="facts"></div></div>
+        <div class="sec"><h3>Komponen — klik untuk menyorot</h3><div class="list" id="list"></div></div>
+        <div class="detail" id="detail"></div>
+        <div class="sec"><h3>Berkas model</h3>
+          <p class="files"><code>models/navion-body.glb</code> — rangka, grip anatomis, braket sensor, dan seluruh elektronik.<br>
+          <code>models/navion-enclosure.glb</code> — rumah modul dan shroud sensor cetak 3D.<br>
+          glTF 2.0 biner, satuan meter, siap dibuka di Blender atau slicer.</p></div>
+      </div>
+
+      <!-- ---------- TAB 2 ---------- -->
+      <div class="pane" id="scrollPane">
+        <div class="rail" id="rail"></div>
+        <div id="chapters"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data/components.js"></script>
+<script src="models/navion-body.js"></script>
+<script src="models/navion-enclosure.js"></script>
+<script>
+/* ---------------------------------------------------- GLB parser */
+function parseGLB(uri){
+  const bin = atob(uri.split(',')[1]);
+  const buf = new ArrayBuffer(bin.length), u8 = new Uint8Array(buf);
+  for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+  const dv = new DataView(buf);
+  let off = 12, json = null, body = null, total = dv.getUint32(8,true);
+  while(off < total){
+    const len = dv.getUint32(off,true), type = dv.getUint32(off+4,true);
+    const chunk = buf.slice(off+8, off+8+len);
+    if(type === 0x4E4F534A) json = JSON.parse(new TextDecoder().decode(chunk));
+    else if(type === 0x004E4942) body = chunk;
+    off += 8 + len;
+  }
+  const g = json, view = i => {
+    const v = g.bufferViews[i];
+    return body.slice(v.byteOffset||0, (v.byteOffset||0)+v.byteLength);
+  };
+  const Type = {5120:Int8Array,5121:Uint8Array,5122:Int16Array,5123:Uint16Array,5125:Uint32Array,5126:Float32Array};
+  const readAccessor = index => {
+    const a = g.accessors[index], v = g.bufferViews[a.bufferView];
+    const bytes = Type[a.componentType].BYTES_PER_ELEMENT;
+    const offset = (v.byteOffset||0) + (a.byteOffset||0);
+    const length = a.count * ({SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[a.type]||1);
+    return new Type[a.componentType](body, offset, length);
+  };
+  const grp = new THREE.Group();
+  g.nodes.forEach(node => {
+    if(node.mesh === undefined) return;
+    const prim = g.meshes[node.mesh].primitives[0];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(readAccessor(prim.attributes.POSITION),3));
+    if(prim.attributes.NORMAL !== undefined) geo.setAttribute('normal', new THREE.BufferAttribute(readAccessor(prim.attributes.NORMAL),3));
+    if(prim.indices !== undefined) geo.setIndex(new THREE.BufferAttribute(readAccessor(prim.indices),1));
+    else geo.computeVertexNormals();
+    const m = g.materials[prim.material].pbrMetallicRoughness, c = m.baseColorFactor || [1,1,1,1];
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color:new THREE.Color(c[0],c[1],c[2]), metalness:m.metallicFactor||0,
+      roughness:m.roughnessFactor===undefined?0.7:m.roughnessFactor, side:THREE.DoubleSide}));
+    mesh.name = node.name;
+    if(node.matrix) mesh.matrix.fromArray(node.matrix).decompose(mesh.position, mesh.quaternion, mesh.scale);
+    else { mesh.position.fromArray(node.translation||[0,0,0]); mesh.quaternion.fromArray(node.rotation||[0,0,0,1]); mesh.scale.fromArray(node.scale||[1,1,1]); }
+    mesh.castShadow = mesh.receiveShadow = true;
+    grp.add(mesh);
+  });
+  return grp;
+}
+
+/* ---------------------------------------------------- scene */
+const stage = document.getElementById('stage');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({antialias:true, alpha:true}); }
+catch(err){ document.getElementById('loading').innerHTML =
+  'Browser ini tidak mengaktifkan WebGL, sehingga model 3D tidak dapat ditampilkan.'; throw err; }
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.06;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.005, 60);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe3ea, 1.55));
+const key = new THREE.DirectionalLight(0xffffff, 2.0);
+key.position.set(1.3, 2.2, 1.8); key.castShadow = true; key.shadow.mapSize.set(2048,2048);
+const sc = key.shadow.camera; sc.left=-1.2; sc.right=1.2; sc.top=1.4; sc.bottom=-1.4; sc.near=.1; sc.far=8;
+sc.updateProjectionMatrix(); scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, .72); fill.position.set(-2,.6,-1.2); scene.add(fill);
+const rim  = new THREE.DirectionalLight(0xffffff, .48); rim.position.set(0,-1,-2); scene.add(rim);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(8,8), new THREE.ShadowMaterial({opacity:.075}));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+/* Pose pakai: batang mengarah ke depan; pod sensor tetap menghadap arah jalan. */
+const ALPHA = 43, TILT = (90 - ALPHA) * Math.PI/180;
+const root = new THREE.Group(); scene.add(root);
+const pivot = new THREE.Group(); pivot.rotation.x = -TILT; root.add(pivot);
+const bodyG = parseGLB(window.NAVION_BODY_GLB);
+const encG  = parseGLB(window.NAVION_ENCLOSURE_GLB);
+pivot.add(bodyG); pivot.add(encG);
+
+const MESH = {};
+[bodyG, encG].forEach(g => g.children.forEach(m => { MESH[m.name] = m; m.userData.home = m.position.clone(); }));
+
+let bb = new THREE.Box3().setFromObject(pivot);
+const ctr0 = bb.getCenter(new THREE.Vector3());
+pivot.position.set(-ctr0.x, -bb.min.y, -ctr0.z);
+bb = new THREE.Box3().setFromObject(pivot);
+const H = bb.max.y - bb.min.y, SPAN = bb.getSize(new THREE.Vector3()).length();
+ground.position.y = 0.001;
+
+/* ---------------------------------------------------- groups */
+const GROUPS = window.NAVION_GROUPS, G_OF = {};
+GROUPS.forEach(g => g.nodes.forEach(n => G_OF[n] = g.id));
+const byId = id => GROUPS.find(g => g.id === id);
+const _b = new THREE.Box3(), _sph = new THREE.Sphere();
+const HEAD_IDS = ['head_shell','bracket','sonar','grip'];
+function centre(id){                       // sudah koordinat dunia
+  const g = byId(id); if(!g) return new THREE.Vector3(0, H*0.5, 0);
+  _b.makeEmpty();
+  g.nodes.forEach(n => { if(MESH[n]) _b.expandByObject(MESH[n]); });
+  return _b.isEmpty() ? new THREE.Vector3(0,H*0.5,0) : _b.getCenter(new THREE.Vector3());
+}
+/* Framing otomatis: jarak kamera dihitung dari bola pembatas grup, bukan angka tetap,
+   sehingga setiap komponen selalu terisi penuh di viewport berapa pun ukurannya. */
+function frame(id, margin){
+  const fov = camera.fov * Math.PI/180;
+  if(!id || id === 'all'){
+    /* Pandangan umum tetap dibidik ke modul kepala. Titik tengah batang membuat
+       kamera menatap ruang kosong, sebab seluruh isi alat ada di ujung atas. */
+    _b.makeEmpty();
+    HEAD_IDS.forEach(h=>{ const gg = byId(h);
+      if(gg) gg.nodes.forEach(n => { if(MESH[n]) _b.expandByObject(MESH[n]); }); });
+    if(_b.isEmpty()){ _b.setFromObject(root); }
+    _b.getBoundingSphere(_sph);
+    return { tgt:_sph.center.clone(),
+             dist:(Math.max(_sph.radius,0.02)/Math.tan(fov/2))*(margin||1.02)*3.1 };
+  }
+  const g = byId(id); _b.makeEmpty();
+  if(g) g.nodes.forEach(n => { if(MESH[n]) _b.expandByObject(MESH[n]); });
+  if(_b.isEmpty()) return frame('all', margin);
+  _b.getBoundingSphere(_sph);
+  const r = Math.max(_sph.radius, 0.010);
+  return { tgt:_sph.center.clone(), dist:Math.max((r/Math.tan(fov/2))*(margin||2.2), r*2.0) };
+}
+
+/* titik bidik bawaan: kepala alat, bukan titik tengah batang */
+const HEAD_TGT = new THREE.Vector3();
+(function(){
+  const b = new THREE.Box3();
+  HEAD_IDS.forEach(id=>{
+    const g = byId(id); if(!g) return;
+    g.nodes.forEach(n=>{ if(MESH[n]) b.expandByObject(MESH[n]); });
+  });
+  if(b.isEmpty()) HEAD_TGT.set(0, H*0.5, 0);
+  else b.getCenter(HEAD_TGT);
+})();
+
+/* ---------------------------------------------------- camera */
+const initialFrame = frame('all', 1.16);
+const view = {az:.55, el:.10, dist:initialFrame.dist, tgt:initialFrame.tgt.clone()};
+const want = {az:view.az, el:view.el, dist:view.dist, tgt:view.tgt.clone()};
+let spin = false, ease = .10;
+function applyCam(){
+  const {az,el,dist,tgt} = view;
+  camera.position.set(tgt.x+dist*Math.cos(el)*Math.sin(az), tgt.y+dist*Math.sin(el),
+                      tgt.z+dist*Math.cos(el)*Math.cos(az));
+  camera.lookAt(tgt);
+}
+let drag=false, px=0, py=0, moved=0;
+renderer.domElement.addEventListener('pointerdown', e=>{drag=true;moved=0;px=e.clientX;py=e.clientY;spin=false;bSpin.classList.remove('on');});
+addEventListener('pointerup', ()=>drag=false);
+addEventListener('pointermove', e=>{
+  if(!drag) return;
+  moved += Math.abs(e.clientX-px)+Math.abs(e.clientY-py);
+  want.az -= (e.clientX-px)*.007;
+  want.el  = Math.max(-.8, Math.min(1.2, want.el + (e.clientY-py)*.006));
+  px=e.clientX; py=e.clientY;
+});
+renderer.domElement.addEventListener('wheel', e=>{
+  e.preventDefault();
+  if(MODE === 'scroll'){
+    /* Narasi tetap dapat ditelusuri saat pointer berada di model, bukan hanya panel kanan. */
+    scrollPane.scrollBy({top:e.deltaY, behavior:'auto'});
+    return;
+  }
+  want.dist = Math.max(SPAN*.05, Math.min(SPAN*1.7, want.dist*(1+Math.sign(e.deltaY)*.11)));
+}, {passive:false});
+
+/* ---------------------------------------------------- teardown */
+const STEPS = window.NAVION_TEARDOWN;
+let explode = 0, wantExplode = 0;
+function setExplode(t){
+  STEPS.forEach((s,i)=>{
+    const g = byId(s.g); if(!g) return;
+    const lo = i/STEPS.length*.55, hi = lo+.45;
+    let k = Math.max(0, Math.min(1,(t-lo)/(hi-lo)));
+    k = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    const d = new THREE.Vector3(...s.dir).normalize().multiplyScalar(s.dist*k);
+    g.nodes.forEach(n => { const m=MESH[n]; if(m) m.position.copy(m.userData.home).add(d); });
+  });
+  const el = document.getElementById('step');
+  if(t>.02 && MODE==='explore'){
+    el.textContent = STEPS[Math.min(STEPS.length-1, Math.floor(t*STEPS.length))].label;
+    el.classList.add('show');
+  } else el.classList.remove('show');
+}
+
+/* ---------------------------------------------------- outline */
+const OUTMAT = new THREE.LineBasicMaterial({color:0x1f6feb, transparent:true, opacity:.85});
+let outlined = null;
+function setOutline(id){
+  if(id === outlined) return;
+  outlined = id;
+  Object.values(MESH).forEach(m=>{
+    const o = m.getObjectByName('__out');
+    if(o){ m.remove(o); }
+  });
+  if(!id) return;
+  const g = byId(id); if(!g) return;
+  g.nodes.forEach(n=>{
+    const m = MESH[n]; if(!m) return;
+    if(!m.userData.edges) m.userData.edges = new THREE.EdgesGeometry(m.geometry, 26);
+    const ls = new THREE.LineSegments(m.userData.edges, OUTMAT);
+    ls.name = '__out'; ls.renderOrder = 3;
+    m.add(ls);
+  });
+}
+
+/* ---------------------------------------------------- highlight */
+let sel = null;
+function highlight(id){
+  Object.entries(MESH).forEach(([n,m])=>{
+    const on = !id || G_OF[n]===id;
+    m.material.opacity = on ? 1 : .09;
+    m.material.transparent = !on;
+    m.material.depthWrite = on;
+    m.material.emissive.setHex(id && G_OF[n]===id ? 0x0a1d3d : 0x000000);
+    m.material.emissiveIntensity = .3;
+  });
+  setOutline(id);
+}
+function select(id){
+  sel = (sel===id) ? null : id;
+  highlight(sel);
+  document.querySelectorAll('.item').forEach(e=>e.classList.toggle('sel', e.dataset.id===sel));
+  document.querySelectorAll('.hot').forEach(e=>e.classList.toggle('sel', e.dataset.id===sel));
+  renderDetail(sel);
+  if(sel){ const f = frame(sel, 2.4); want.tgt.copy(f.tgt); want.dist = f.dist; }
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('click', e=>{
+  if(MODE!=='explore' || moved>6) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX-r.left)/r.width)*2-1; ndc.y = -((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(root.children, true).filter(h=>h.object.material.opacity>.5);
+  select(hit.length ? (G_OF[hit[0].object.name]||null) : sel);
+});
+
+/* ---------------------------------------------------- UI: tab 1 */
+const facts = document.getElementById('facts');
+window.NAVION_FACTS.forEach(([b,s])=>{
+  const d=document.createElement('div'); d.className='fact';
+  d.innerHTML = '<b>'+b+'</b><span>'+s+'</span>'; facts.appendChild(d);
+});
+const list = document.getElementById('list');
+GROUPS.forEach(g=>{
+  const d=document.createElement('div'); d.className='item'; d.dataset.id=g.id;
+  d.innerHTML = '<span class="dot" style="background:'+g.tone+'"></span><span class="nm">'+g.label+'</span>'
+    + (g.file==='enclosure' ? '<span class="tag">file terpisah</span>' : '')
+    + '<span class="qt">'+g.qty+'x</span>';
+  d.onclick = ()=>select(g.id); list.appendChild(d);
+});
+function renderDetail(id){
+  const box = document.getElementById('detail');
+  if(!id){ box.innerHTML = '<p class="empty">Pilih komponen dari daftar di atas, atau klik langsung pada model 3D.</p>'; return; }
+  const g = byId(id);
+  box.innerHTML =
+    '<div class="kicker">'+(g.file==='enclosure'?'navion-enclosure.glb':'navion-body.glb')+'</div>'
+    + '<h4>'+g.label+'</h4><p class="part">'+g.part+'</p><p class="tagline">'+g.tagline+'</p>'
+    + '<div class="meta"><span class="chip">Jumlah '+g.qty+'x</span><span class="chip">'+g.price+'</span></div>'
+    + '<table>'+g.specs.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table>'
+    + (g.warn ? '<div class="note warn"><b>Perlu diperhatikan</b>'+g.warn+'</div>' : '')
+    + (g.note ? '<div class="note"><b>Catatan desain</b>'+g.note+'</div>' : '');
+}
+renderDetail(null);
+
+const hots = GROUPS.map(g=>{
+  const el=document.createElement('div'); el.className='hot'; el.dataset.id=g.id; el.title=g.label;
+  el.onclick = ev=>{ ev.stopPropagation(); select(g.id); };
+  stage.appendChild(el); return {el,g};
+});
+
+const bExplode=document.getElementById('bExplode'), bEnc=document.getElementById('bEnc'),
+      bSpin=document.getElementById('bSpin'), rng=document.getElementById('rng');
+bExplode.onclick = ()=>{ wantExplode = wantExplode>.5?0:1; bExplode.classList.toggle('on',wantExplode>.5); rng.value=wantExplode*100; };
+rng.oninput = ()=>{ wantExplode = rng.value/100; bExplode.classList.toggle('on',wantExplode>.5); };
+bEnc.onclick = ()=>{ encG.visible=!encG.visible; bEnc.classList.toggle('on',!encG.visible);
+  bEnc.textContent = encG.visible ? 'Sembunyikan casing' : 'Tampilkan casing'; };
+bSpin.onclick = ()=>{ spin=!spin; bSpin.classList.toggle('on',spin); };
+document.getElementById('bReset').onclick = ()=>{
+  { const f=frame('all',1.16); want.az=.55; want.el=.10; want.dist=f.dist; want.tgt.copy(f.tgt); }
+  wantExplode=0; rng.value=0; bExplode.classList.remove('on');
+  encG.visible=true; bEnc.classList.remove('on'); bEnc.textContent='Sembunyikan casing';
+  spin=false; bSpin.classList.remove('on'); sel=null; highlight(null); renderDetail(null);
+  document.querySelectorAll('.item,.hot').forEach(e=>e.classList.remove('sel'));
+};
+
+/* ---------------------------------------------------- UI: tab 2 (scroll) */
+const SCR = window.NAVION_SCROLL;
+const chapters = document.getElementById('chapters'), rail = document.getElementById('rail');
+SCR.forEach((s,i)=>{
+  const d=document.createElement('section'); d.className='chapter'; d.dataset.i=i;
+  d.innerHTML = '<div class="n">'+String(i+1).padStart(2,'0')+' / '+String(SCR.length).padStart(2,'0')+'</div>'
+    + '<h4>'+s.title+'</h4><div class="sub">'+s.sub+'</div>'
+    + '<div class="cue">Penjelasan muncul sebagai anotasi pada model.</div>';
+  chapters.appendChild(d);
+  const b=document.createElement('i'); rail.appendChild(b);
+});
+const hint = document.createElement('div');
+hint.className='hint'; hint.textContent='Gulir di mana saja untuk menyusuri alat';
+stage.appendChild(hint); hint.style.display='none';
+
+let curChap = -1, scrollAt = {i:0, frac:0};
+const capEl = document.getElementById('cap');
+function frameScroll(){
+  /* Setiap bab adalah satu framing yang disengaja. Jangan hitung ulang jarak
+     dari bounding box saat animasi berjalan: itu yang membuat kamera tampak zoom liar. */
+  const s = SCR[scrollAt.i];
+  const f = frame(s.cam.tgt, s.cam.margin || 2.15);
+  want.az = s.cam.az;
+  want.el = s.cam.el;
+  want.dist = s.cam.dist || f.dist;
+  want.tgt.copy(f.tgt);
+  wantExplode = 0;
+}
+function applyChapter(i, frac){
+  scrollAt = {i, frac};
+  const s = SCR[i];
+  frameScroll();
+  if(i !== curChap){
+    curChap = i;
+    highlight(s.focus);
+    capEl.classList.remove('show');
+    calloutFor = s.focus ? s.cam.tgt : null;
+    const co = document.getElementById('callout');
+    co.querySelector('.n').textContent    = String(i+1).padStart(2,'0')+' / '+String(SCR.length).padStart(2,'0');
+    co.querySelector('h5').textContent    = s.title;
+    co.querySelector('.sub').textContent  = s.sub;
+    co.querySelector('p').textContent     = s.body;
+    [...rail.children].forEach((b,k)=>b.classList.toggle('on', k===i));
+    [...chapters.children].forEach((c,k)=>c.classList.toggle('act', k===i));
+  }
+}
+const scrollPane = document.getElementById('scrollPane');
+scrollPane.addEventListener('scroll', ()=>{
+  if(MODE!=='scroll') return;
+  const chs = [...chapters.children];
+  const i = Math.max(0, Math.min(chs.length-1, Math.round(scrollPane.scrollTop / scrollPane.clientHeight)));
+  applyChapter(i, 0);
+  hint.style.opacity = scrollPane.scrollTop > 40 ? 0 : 1;
+});
+
+/* ---------------------------------------------------- tabs */
+let MODE = 'explore';
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    MODE = t.dataset.tab;
+    const ex = MODE==='explore';
+    document.getElementById('explorePane').classList.toggle('on', ex);
+    document.getElementById('scrollPane').classList.toggle('on', !ex);
+    document.getElementById('hud').style.display = ex ? 'flex' : 'none';
+    hint.style.display = ex ? 'none' : 'block';
+    document.getElementById('tabHint').textContent = ex
+      ? 'Tarik untuk memutar · gulir untuk memperbesar'
+      : 'Gulir di mana saja · kamera mengikuti tiap komponen';
+    ease = ex ? .10 : .075;
+    if(ex){
+      capEl.classList.remove('show'); curChap = -1; calloutFor = null;
+      sel=null; highlight(null); renderDetail(null);
+      wantExplode = rng.value/100;
+      document.querySelectorAll('.item,.hot').forEach(e=>e.classList.remove('sel'));
+    } else {
+      scrollPane.scrollTop = 0; applyChapter(0, 0);
+      view.az=want.az; view.el=want.el; view.dist=want.dist; view.tgt.copy(want.tgt);
+    }
+  };
+});
+
+/* ---------------------------------------------------- loop */
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const tmp = new THREE.Vector3();
+function tick(){
+  requestAnimationFrame(tick);
+  if(spin && MODE==='explore') want.az += .0035;
+  view.az += (want.az-view.az)*ease;
+  view.el += (want.el-view.el)*ease;
+  view.dist += (want.dist-view.dist)*ease;
+  view.tgt.lerp(want.tgt, ease);
+  applyCam();
+
+  if(Math.abs(wantExplode-explode) > .0008){ explode += (wantExplode-explode)*.085; setExplode(explode); }
+  /* anotasi callout hanya pada mode telusur */
+  const co = document.getElementById('callout'), an = document.getElementById('anchor'),
+        lead = document.getElementById('leader'), ln = lead.firstElementChild;
+  if(MODE==='scroll' && calloutFor && calloutFor!=='all'){
+    tmp.copy(centre(calloutFor)).add(pivot.position).add(root.position).project(camera);
+    const W = stage.clientWidth, Hh = stage.clientHeight;
+    const ax = (tmp.x*.5+.5)*W, ay = (-tmp.y*.5+.5)*Hh;
+    const onScreen = tmp.z<1 && ax>-40 && ax<W+40 && ay>-40 && ay<Hh+40;
+    an.classList.toggle('show', onScreen);
+    co.classList.toggle('show', onScreen);
+    lead.classList.toggle('show', onScreen);
+    if(onScreen){
+      an.style.left = ax+'px'; an.style.top = ay+'px';
+      const cw = co.offsetWidth || 288, ch = co.offsetHeight || 150;
+      const right = ax < W*0.5;
+      let cx = right ? ax + 74 : ax - 74 - cw;
+      let cy = ay - ch*0.42;
+      cx = Math.max(14, Math.min(W - cw - 14, cx));
+      cy = Math.max(14, Math.min(Hh - ch - 14, cy));
+      co.style.left = cx+'px'; co.style.top = cy+'px';
+      const px = right ? cx : cx + cw;
+      const py = Math.max(cy + 16, Math.min(cy + ch - 16, ay));
+      ln.setAttribute('x1', ax); ln.setAttribute('y1', ay);
+      ln.setAttribute('x2', px); ln.setAttribute('y2', py);
+    }
+  } else { an.classList.remove('show'); co.classList.remove('show'); lead.classList.remove('show'); }
+
+  const showHot = MODE==='explore';
+  hots.forEach(({el,g})=>{
+    if(!showHot){ el.style.display='none'; return; }
+    tmp.copy(centre(g.id)).project(camera);
+    const vis = tmp.z<1 && Math.abs(tmp.x)<1.05 && Math.abs(tmp.y)<1.05;
+    el.style.display = vis ? 'grid' : 'none';
+    el.style.left = ((tmp.x*.5+.5)*stage.clientWidth)+'px';
+    el.style.top  = ((-tmp.y*.5+.5)*stage.clientHeight)+'px';
+  });
+  renderer.render(scene, camera);
+}
+applyCam(); tick();
+document.getElementById('loading').classList.add('gone');
+</script>
+</body>
+</html>
